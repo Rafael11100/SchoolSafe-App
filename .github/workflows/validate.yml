@@ -1,0 +1,37 @@
+name: Validate SchoolSafe App
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: schoolsafe-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Expo SDK 58 · TypeScript · lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Expo Doctor
+        run: npx expo-doctor@latest
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npx expo lint
+      - name: Validate project configuration
+        run: node -e "for (const f of ['app.json','eas.json','package.json']) JSON.parse(require('fs').readFileSync(f,'utf8')); console.log('JSON configuration is valid')"

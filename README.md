@@ -1,56 +1,90 @@
-# Welcome to your Expo app 👋
+# Segurança Escolar
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicativo multiplataforma de monitoramento de ambientes escolares, migrado da base funcional de `Rafael11100/my-app` para este repositório Expo.
 
-## Get started
+## Funcionalidades
 
-1. Install dependencies
+- Login administrativo conectado ao JazzSecurity, com sessão autenticada e expiração automática.
+- Persistência segura da sessão no dispositivo e armazenamento compatível com a versão web.
+- Consulta autenticada de `/sensores` e `/eventos`, com atualização automática a cada 10 segundos.
+- Estado de conexão, erros da API, última sincronização e indicador de sensores offline/desatualizados.
+- Painel com resumo de alertas, planta baixa interativa e detalhes dos sensores.
+- Agrupamento visual dos marcadores por tipo e localização no mapa; os cartões da tela de sensores continuam exibindo os dispositivos individualmente.
+- Histórico de eventos em modo somente leitura. Os dados reais não são simulados nem apagados localmente.
 
-   ```bash
-   npm install
-   ```
+## Design
 
-2. Start the app
+A interface usa uma linguagem visual inspirada no Material Design 3: cores organizadas por função (primária, superfícies e estados semânticos), elevação tonal, hierarquia tipográfica, componentes arredondados, feedback de estado e alvos de toque acessíveis. A experiência é responsiva para Android, iOS e web.
 
-   ```bash
-   npx expo start
-   ```
+O painel e os cartões de áreas usam fotografias reais do Unsplash:
+- Corredor escolar: Lutz Stallknecht / Unsplash.
+- Sala de aula: Nathan Cima / Unsplash.
 
-In the output, you'll find options to open the app in a
+As imagens são carregadas por `expo-image`, que oferece cache em memória e disco. É necessária conexão com a internet no primeiro carregamento.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## API e autenticação
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+O aplicativo utiliza o JazzSecurity como fonte de verdade. Não há cadastro no cliente nem usuários administrativos criados localmente.
 
-## Get a fresh project
+Copie `.env.example` para `.env.local`. A URL de produção já está preenchida:
 
-When you're ready, run:
-
-```bash
-npm run reset-project
+```env
+EXPO_PUBLIC_JAZZSECURITY_URL=https://jazz-security.vercel.app
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Para desenvolvimento local:
+- Android Emulator: `http://10.0.2.2:3001`
+- iOS Simulator ou Expo Web na mesma máquina: `http://localhost:3001`
+- Celular físico: use o IP da máquina que hospeda a API, por exemplo `http://192.168.1.20:3001`
 
-### Other setup steps
+No backend JazzSecurity, configure `JWT_SECRET`, `ADMIN_OPERACAO_PASSWORD` e `ADMIN_COORDENACAO_PASSWORD`. Não coloque senhas, JWT secrets ou outros segredos em variáveis `EXPO_PUBLIC_*`.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+O contrato consumido pelo app é:
+- `POST /auth/login`
+- `GET /sensores`
+- `GET /eventos?limit=100`
 
-## Learn more
+As rotas protegidas recebem o token em `Authorization: Bearer <token>`. Para Expo Web, inclua a origem local/publicada em `CORS_ORIGINS` no backend.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Desenvolvimento
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Requisitos do projeto: Expo SDK 58, React Native 0.88 e Node.js 22.13 ou superior.
 
-## Join the community
+```bash
+npm ci
+npx expo install --fix
+npx expo-doctor
+npx expo start --clear
+```
 
-Join our community of developers creating universal apps.
+Verificações:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx tsc --noEmit
+npx expo lint
+```
+
+O Expo Router mantém as rotas em `src/app/`; componentes, contexto, tema e utilitários ficam fora da pasta de rotas.
+
+## Android
+
+Para gerar um APK de teste:
+
+```bash
+npx eas-cli@latest build --platform android --profile preview
+```
+
+Para um pacote AAB:
+
+```bash
+npx eas-cli@latest build --platform android --profile production
+```
+
+A primeira execução do EAS pode solicitar autenticação e vínculo do projeto Expo.
+
+## Referências de design e plataforma
+
+- [Material Design 3 — sistema de cores, tipografia, formas e acessibilidade](https://developer.android.com/codelabs/m3-design-theming)
+- [Google Android — acessibilidade](https://developer.android.com/design/ui/mobile/guides/foundations/accessibility)
+- [Expo SDK 58 — Expo Router](https://docs.expo.dev/versions/v58.0.0/sdk/router/)
+- [Expo SDK 58 — Expo Image](https://docs.expo.dev/versions/v58.0.0/sdk/image/)
