@@ -1,0 +1,79 @@
+import { Ionicons } from '@expo/vector-icons';
+import React, { memo, useEffect } from 'react';
+import { Pressable, StyleSheet, View, type ViewStyle, type PressableInstance } from 'react-native';
+import Animated, { cancelAnimation, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import type { Sensor } from '@/context/alerts-context';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+type Props = {
+  sensor: Sensor;
+  size: { width: number; height: number };
+  focused: boolean;
+  onPress: () => void;
+  onRef: (node: PressableInstance | null) => void;
+};
+
+function MapSensorChipComponent({ sensor, size, focused, onPress, onRef }: Props) {
+  const reducedMotion = useReducedMotion();
+  const pulse = useSharedValue(0);
+  const smoke = sensor.kind === 'smoke';
+  const accent = smoke ? '#F2B8B5' : '#A8C7FA';
+  const duration = smoke ? 600 : 900;
+
+  useEffect(() => {
+    cancelAnimation(pulse);
+    if (sensor.active && focused && !reducedMotion) {
+      pulse.value = withRepeat(withSequence(
+        withTiming(1, { duration }),
+        withTiming(0, { duration }),
+      ), -1, false);
+    } else {
+      pulse.value = withTiming(0, { duration: reducedMotion ? 150 : 180 });
+    }
+    return () => cancelAnimation(pulse);
+  }, [sensor.active, focused, reducedMotion, duration, pulse]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: sensor.active && !reducedMotion ? 0.62 + pulse.value * 0.38 : 1,
+    transform: [{ scale: sensor.active && !reducedMotion ? 1 + pulse.value * 0.075 : 1 }],
+  }));
+  const rippleStyle = useAnimatedStyle(() => ({
+    opacity: sensor.active && focused && !reducedMotion ? 0.5 * (1 - pulse.value) : 0,
+    transform: [{ scale: sensor.active && focused && !reducedMotion ? 1 + pulse.value * 0.65 : 1 }],
+  }));
+
+  return <View style={[styles.wrapper, size as ViewStyle]}>
+    {sensor.active && focused && !reducedMotion && <Animated.View pointerEvents="none" style={[styles.ripple, { borderColor: accent }, rippleStyle]} />}
+    <AnimatedPressable
+    ref={(node: unknown) => onRef(node as PressableInstance | null)}
+    onPress={onPress}
+    style={[
+      styles.chip,
+      size as ViewStyle,
+      { borderColor: sensor.active ? accent : accent + '8C', backgroundColor: sensor.active ? (smoke ? 'rgba(242,184,181,0.22)' : 'rgba(168,199,250,0.22)') : 'rgba(31,31,31,0.96)' },
+      animatedStyle,
+    ]}
+    accessibilityRole="button"
+    accessibilityLabel={`${smoke ? 'Fumaça' : 'Movimento'}, ${sensor.location.trim() || 'Área sem nome'}, ${sensor.active ? (smoke ? 'em alerta' : 'presença detectada') : 'normal'}`}
+    hitSlop={4}
+    >
+      <Ionicons name={smoke ? 'flame' : 'walk'} size={16} color={sensor.active ? accent : '#C1C7D0'} />
+    </AnimatedPressable>
+  </View>;
+}
+
+export const MapSensorChip = memo(MapSensorChipComponent);
+
+const styles = StyleSheet.create({
+  wrapper: { alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+  ripple: { position: 'absolute', width: '100%', height: '100%', borderRadius: 12, borderWidth: 1.5 },
+  chip: {
+    borderRadius: 11,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 28,
+    minHeight: 28,
+  },
+});
