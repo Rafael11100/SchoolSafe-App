@@ -18,9 +18,9 @@ const schoolTheme = {
     ...DefaultTheme.colors,
     primary: '#A8C7FA',
     background: '#111318',
-    card: 'rgba(40,40,40,0.92)',
+    card: '#1D2025',
     text: '#E3E2E9',
-    border: 'rgba(160,160,160,0.14)',
+    border: '#343941',
   },
 };
 
