@@ -1,3 +1,4 @@
+/* eslint react-hooks/immutability: off -- Reanimated shared values are intentionally updated by animation effects. */
 import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';

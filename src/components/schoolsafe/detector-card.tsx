@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Animated,
   Easing,
@@ -33,8 +33,8 @@ export default function DetectorCard({
   const colors = useSchoolColors();
   const isSmoke = kind === "smoke";
   const accent = isSmoke ? colors.red : colors.blue;
-  const pulse = useRef(new Animated.Value(0)).current;
-  const glow = useRef(new Animated.Value(0)).current;
+  const [pulse] = useState(() => new Animated.Value(0));
+  const [glow] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     if (alert && blink) {

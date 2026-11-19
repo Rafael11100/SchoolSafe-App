@@ -1,5 +1,4 @@
-import { DefaultTheme, ThemeProvider } from 'expo-router';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { DefaultTheme, ThemeProvider, Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';

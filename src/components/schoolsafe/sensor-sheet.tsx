@@ -1,3 +1,4 @@
+/* eslint react-hooks/immutability: off -- Reanimated shared values are intentionally updated in effects, callbacks and gesture worklets. */
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
@@ -9,7 +10,7 @@ import { MOTION_DURATION, SPRING_SNAPPY } from '@/components/schoolsafe/motion-p
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Glass } from '@/components/schoolsafe/glass';
 import { AREA_PHOTOS } from '@/constants/area-photos';
-import { useAlerts, type Sensor } from '@/context/alerts-context';
+import { useAlerts } from '@/context/alerts-context';
 
 export type SensorOriginRect = { x: number; y: number; width: number; height: number };
 type SheetState = { sensorId: string; originRect: SensorOriginRect };
@@ -32,7 +33,7 @@ export function SensorSheetProvider({ children }: { children: React.ReactNode })
   const value = useMemo(() => ({ openSensor }), [openSensor]);
   return <SheetContext.Provider value={value}>
     <View style={{ flex: 1 }}>{children}</View>
-    <SensorSheet state={sheet} onClose={closeSensor} />
+    <SensorSheet key={sheet ? `${sheet.sensorId}:${sheet.originRect.x}:${sheet.originRect.y}` : 'closed'} state={sheet} onClose={closeSensor} />
   </SheetContext.Provider>;
 }
 
@@ -50,10 +51,10 @@ function SensorSheet({ state, onClose }: { state: SheetState | null; onClose: ()
   const scaleY = useSharedValue(1);
   const backdropOpacity = useSharedValue(0);
   const [closing, setClosing] = useState(false);
-  const [elapsedNow, setElapsedNow] = useState(Date.now());
+  const [elapsedNow, setElapsedNow] = useState(0);
 
   useEffect(() => {
-    if (!state) { setClosing(false); backdropOpacity.value = 0; return; }
+    if (!state) { backdropOpacity.value = 0; return; }
     const { originRect } = state;
     translateX.value = originRect.x + originRect.width / 2 - screen.width / 2;
     translateY.value = originRect.y + originRect.height / 2 - screen.height / 2;
@@ -81,13 +82,8 @@ function SensorSheet({ state, onClose }: { state: SheetState | null; onClose: ()
     return () => clearInterval(timer);
   }, [sensor?.active]);
 
-  useEffect(() => {
-    if (!state || Platform.OS === 'web') return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => { close(); return true; });
-    return () => subscription.remove();
-  });
 
-  const close = () => {
+  const close = useCallback(() => {
     if (!state || closing) return;
     setClosing(true);
     if (reducedMotion) {
@@ -99,7 +95,16 @@ function SensorSheet({ state, onClose }: { state: SheetState | null; onClose: ()
     scaleX.value = withTiming(Math.max(0.08, state.originRect.width / targetWidth), { duration: MOTION_DURATION.exit });
     scaleY.value = withTiming(Math.max(0.08, state.originRect.height / targetHeight), { duration: MOTION_DURATION.exit });
     backdropOpacity.value = withTiming(0, { duration: MOTION_DURATION.exit - 60 }, (finished) => { if (finished) runOnJS(onClose)(); });
-  };
+  }, [state, closing, reducedMotion, onClose, translateX, translateY, scaleX, scaleY, backdropOpacity, screen.width, screen.height, targetWidth, targetHeight]);
+
+  useEffect(() => {
+    if (!state || Platform.OS === 'web') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      close();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [state, close]);
 
   const cardAnimatedStyle = useAnimatedStyle(() => ({
     opacity: closing ? backdropOpacity.value : 1,
