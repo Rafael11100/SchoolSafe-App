@@ -84,7 +84,7 @@ export default function LoginScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" bounces={false}>
           <Animated.View entering={reduceMotion ? FadeIn.duration(150) : FadeInDown.duration(420)} style={styles.brand}>
             <View style={styles.brandGlow}>
-              <Image source={require('@/assets/images/logo-glow.png')} style={styles.brandImage} resizeMode="contain" accessibilityLabel="Emblema Segurança Escolar" />
+              <Image source={require('@/assets/images/seguranca-escolar.png')} style={styles.brandImage} resizeMode="contain" accessibilityLabel="Emblema Segurança Escolar" />
             </View>
             <Text style={styles.brandTitle}>Segurança Escolar</Text>
             <Text style={styles.eyebrow}>ACESSO ADMINISTRATIVO</Text>

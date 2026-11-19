@@ -23,7 +23,7 @@ export default function Header({ compact: _compact = true }: HeaderProps) {
         <View style={styles.row}>
           <Pressable onPress={() => router.replace('/' as any)} style={styles.brand} accessibilityRole="button" accessibilityLabel="Voltar à central">
             <View style={styles.logoBadge}>
-              <Image source={require('@/assets/images/logo-glow.png')} style={styles.logoImage} resizeMode="contain" accessibilityLabel="Emblema Segurança Escolar" />
+              <Image source={require('@/assets/images/seguranca-escolar.png')} style={styles.logoImage} resizeMode="contain" accessibilityLabel="Emblema Segurança Escolar" />
             </View>
             <View style={styles.titleBlock}>
               <Text style={styles.title}>Segurança Escolar</Text>

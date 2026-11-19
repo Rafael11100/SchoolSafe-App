@@ -4,7 +4,7 @@
     "slug": "seguranca-escolar",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo-glow.png",
+    "icon": "./assets/images/seguranca-escolar.png",
     "scheme": "segurancaescolar",
     "userInterfaceStyle": "dark",
     "ios": {
@@ -13,21 +13,21 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#111318",
-        "foregroundImage": "./assets/images/logo-glow.png"
+        "foregroundImage": "./assets/images/seguranca-escolar.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.rafael11100.segurancaescolar"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/logo-glow.png"
+      "favicon": "./assets/images/seguranca-escolar.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo-glow.png",
+          "image": "./assets/images/seguranca-escolar.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#111318",
