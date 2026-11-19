@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   historyTitle: { color: '#E3E2E9', fontSize: 13, fontWeight: '700' },
   historySub: { color: '#888', fontSize: 11, marginTop: 3 },
   photoHero: { width: '100%', maxWidth: 520, height: 158, borderRadius: 24, overflow: 'hidden', justifyContent: 'flex-end', borderWidth: 1, borderColor: '#343941' },
-  photoShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(17,19,24,0.56)' },
+  photoShade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17,19,24,0.56)' },
   photoCopy: { paddingHorizontal: 18, paddingVertical: 16, gap: 5 },
   photoEyebrow: { color: '#DCE2F0', fontSize: 9, fontWeight: '800', letterSpacing: 1.5 },
   photoTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
