@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { AREAS, type AreaId } from '@/constants/areas';
-import { SENSOR_AREA_BY_REMOTE_ID } from '@/constants/sensor-registry';
 import { useAuth } from '@/context/auth-context';
 import { formatTime } from '@/utils/date';
 
@@ -47,21 +46,29 @@ export type SensorRecord = {
 };
 
 type ApiSensor = {
-  id: number;
-  nome: string;
-  tipo: 'PIR' | 'MQ-2';
-  estado_ativo: boolean;
-  valor: number | null;
-  movimento: boolean | null;
-  data_hora: string | null;
-  status: 'online' | 'desatualizado' | 'indisponivel';
+  id?: number | string | null;
+  codigo?: string | null;
+  nome?: string | null;
+  tipo: string;
+  localizacao_id?: string | null;
+  localizacao?: string | null;
+  estado_ativo?: boolean | null;
+  valor?: number | null;
+  movimento?: boolean | null;
+  data_hora?: string | null;
+  status?: string | null;
 };
 
 type ApiEvent = {
-  id: number;
-  sensor_id: number;
-  tipo_evento: 'MOVIMENTO' | 'FUMACA_GAS' | 'NORMALIZACAO';
-  descricao: string;
+  id?: number | string | null;
+  sensor_id?: number | string | null;
+  sensor_codigo?: string | null;
+  codigo_sensor?: string | null;
+  codigo?: string | null;
+  localizacao_id?: string | null;
+  localizacao?: string | null;
+  tipo_evento: string;
+  descricao?: string | null;
   data_hora: string;
 };
 
@@ -140,56 +147,126 @@ async function fetchJson<T>(path: string, token: string): Promise<T> {
   }
 }
 
-function kindForSensorType(type: ApiSensor['tipo']): SensorKind {
-  return type === 'MQ-2' ? 'smoke' : 'motion';
+function kindForSensorType(type: string): SensorKind | null {
+  const normalized = type.trim().toUpperCase().replace(/[\s_]/g, '');
+  if (normalized === 'MQ-2' || normalized === 'MQ2' || normalized === 'FUMACA') return 'smoke';
+  if (normalized === 'PIR' || normalized === 'MOVIMENTO') return 'motion';
+  return null;
 }
 
-function sensorUiId(remoteId: number): string {
-  return `JAZZ_${remoteId}`;
+function sensorUiId(record: ApiSensor, index: number): string {
+  const identifier = record.codigo?.trim() || (record.id !== null && record.id !== undefined ? String(record.id) : '');
+  return identifier || 'SENSOR_' + String(index + 1).padStart(2, '0');
 }
 
-function areaForRemoteSensor(remoteId: number) {
-  const areaId = SENSOR_AREA_BY_REMOTE_ID[remoteId] ?? null;
-  return areaId ? AREAS[areaId] : null;
+function normalizeLocation(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
-/** Só cria cartões para registros efetivamente recebidos de GET /sensores. */
-function mapSensors(records: ApiSensor[], events: ApiEvent[]): Sensor[] {
-  const counters: Record<SensorKind, number> = { smoke: 0, motion: 0 };
-  const latestEventBySensor = new Map<number, ApiEvent>();
+const LOCATION_ALIASES: Record<string, AreaId> = {
+  'wc masculino': 'WC_MASC',
+  'banheiro masculino': 'WC_MASC',
+  'wc masc': 'WC_MASC',
+  'wc feminino': 'WC_FEM',
+  'banheiro feminino': 'WC_FEM',
+  'wc fem': 'WC_FEM',
+};
 
-  for (const event of [...events].sort((a, b) => Date.parse(b.data_hora) - Date.parse(a.data_hora))) {
-    if (!latestEventBySensor.has(event.sensor_id)) {
-      latestEventBySensor.set(event.sensor_id, event);
-    }
+function resolveAreaId(locationId?: string | null, locationName?: string | null): AreaId | null {
+  const normalizedId = locationId?.trim().toUpperCase();
+  if (normalizedId && Object.prototype.hasOwnProperty.call(AREAS, normalizedId)) {
+    return normalizedId as AreaId;
   }
 
-  return records.flatMap((record) => {
-    if (record.tipo !== 'PIR' && record.tipo !== 'MQ-2') return [];
+  const normalizedName = locationName ? normalizeLocation(locationName) : '';
+  if (!normalizedName) return null;
 
+  const alias = LOCATION_ALIASES[normalizedName];
+  if (alias) return alias;
+
+  const matchingArea = (Object.keys(AREAS) as AreaId[]).find((areaId) => {
+    return normalizeLocation(AREAS[areaId].name.replace(/\n/g, ' ')) === normalizedName;
+  });
+  return matchingArea ?? null;
+}
+
+function locationForSensor(record: ApiSensor): { areaId: AreaId | null; location: string } {
+  const areaId = resolveAreaId(record.localizacao_id, record.localizacao);
+  const area = areaId ? AREAS[areaId] : null;
+  return {
+    areaId,
+    location: record.localizacao?.trim() || (area ? area.name.replace(/\s*\n\s*/g, ' ').trim() : 'Não cadastrado'),
+  };
+}
+
+function normalizeSensorsPayload(payload: unknown): ApiSensor[] {
+  if (Array.isArray(payload)) return payload as ApiSensor[];
+
+  if (payload && typeof payload === 'object' && 'sensores' in payload) {
+    const sensors = (payload as { sensores?: unknown }).sensores;
+    if (Array.isArray(sensors)) return sensors as ApiSensor[];
+  }
+
+  throw new TelemetryRequestError('O JazzSecurity retornou um formato inesperado em /sensores. Esperado: uma lista ou um objeto com a propriedade "sensores".');
+}
+
+function normalizeEventsPayload(payload: unknown): ApiEvent[] {
+  if (Array.isArray(payload)) return payload as ApiEvent[];
+
+  if (payload && typeof payload === 'object' && 'eventos' in payload) {
+    const events = (payload as { eventos?: unknown }).eventos;
+    if (Array.isArray(events)) return events as ApiEvent[];
+  }
+
+  throw new TelemetryRequestError('O JazzSecurity retornou um formato inesperado em /eventos. Esperado: uma lista ou um objeto com a propriedade "eventos".');
+}
+
+function eventMatchesSensor(event: ApiEvent, sensor: ApiSensor): boolean {
+  const eventIdentifiers = [event.sensor_codigo, event.codigo_sensor, event.codigo, event.sensor_id]
+    .filter((value) => value !== null && value !== undefined)
+    .map(String);
+  const sensorIdentifiers = [sensor.codigo, sensor.id]
+    .filter((value) => value !== null && value !== undefined)
+    .map(String);
+
+  return eventIdentifiers.some((eventId) => sensorIdentifiers.includes(eventId));
+}
+
+function mapSensors(records: ApiSensor[], events: ApiEvent[]): Sensor[] {
+  const counters: Record<SensorKind, number> = { smoke: 0, motion: 0 };
+
+  return records.flatMap((record, recordIndex) => {
     const kind = kindForSensorType(record.tipo);
+    if (!kind) return [];
+
     counters[kind] += 1;
     const index = counters[kind];
-    const area = areaForRemoteSensor(record.id);
-    const lastEvent = latestEventBySensor.get(record.id);
-    const active = record.estado_ativo === true;
+    const id = sensorUiId(record, recordIndex);
+    const locationInfo = locationForSensor(record);
+    const matchingEvents = events
+      .filter((event) => eventMatchesSensor(event, record))
+      .sort((a, b) => Date.parse(b.data_hora) - Date.parse(a.data_hora));
+    const lastEvent = matchingEvents[0];
+    const relevantAlert = matchingEvents.find((event) => event.tipo_evento !== 'NORMALIZACAO');
+    const active = record.estado_ativo === true || record.movimento === true;
     const lastEventAt = displayTimestamp(lastEvent?.data_hora);
-    const relevantAlert = active
-      ? events
-          .filter((event) => event.sensor_id === record.id && event.tipo_evento !== 'NORMALIZACAO')
-          .sort((a, b) => Date.parse(b.data_hora) - Date.parse(a.data_hora))[0]
-      : undefined;
+    const serverStatus = record.status?.trim().toLowerCase();
 
     return [{
-      id: sensorUiId(record.id),
+      id,
       kind,
       index,
-      label: record.nome?.trim() || `${record.tipo} ${String(index).padStart(2, '0')}`,
-      location: area ? area.name.replace(/\s*\n\s*/g, ' ').trim() : 'Não cadastrado',
-      areaId: SENSOR_AREA_BY_REMOTE_ID[record.id] ?? null,
-      status: record.status === 'indisponivel'
+      label: record.nome?.trim() || record.codigo?.trim() || record.tipo + ' ' + String(index).padStart(2, '0'),
+      location: locationInfo.location,
+      areaId: locationInfo.areaId,
+      status: serverStatus === 'indisponivel' || serverStatus === 'offline'
         ? 'offline'
-        : record.status === 'desatualizado'
+        : serverStatus === 'desatualizado' || serverStatus === 'stale'
           ? 'stale'
           : active
             ? 'alert'
@@ -200,34 +277,37 @@ function mapSensors(records: ApiSensor[], events: ApiEvent[]): Sensor[] {
         : null,
       endedAt: !active && lastEvent?.tipo_evento === 'NORMALIZACAO' ? lastEventAt : null,
       lastEventAt,
-      lastSeenAt: record.data_hora,
+      lastSeenAt: record.data_hora ?? null,
       value: typeof record.valor === 'number' ? record.valor : null,
     }];
   });
 }
 
 function mapHistory(events: ApiEvent[], sensorRecords: ApiSensor[]): SensorRecord[] {
-  const sensorById = new Map(sensorRecords.map((sensor) => [sensor.id, sensor]));
-
   return [...events]
     .sort((a, b) => Date.parse(b.data_hora) - Date.parse(a.data_hora))
-    .map((event) => {
-      const remoteSensor = sensorById.get(event.sensor_id);
-      const kind: SensorKind = remoteSensor
-        ? kindForSensorType(remoteSensor.tipo)
-        : event.tipo_evento === 'FUMACA_GAS'
-          ? 'smoke'
-          : 'motion';
-      const area = areaForRemoteSensor(event.sensor_id);
+    .map((event, eventIndex) => {
+      const remoteSensor = sensorRecords.find((sensor) => eventMatchesSensor(event, sensor));
+      const kindFromSensor = remoteSensor ? kindForSensorType(remoteSensor.tipo) : null;
+      const kind: SensorKind = kindFromSensor
+        ?? (event.tipo_evento === 'FUMACA_GAS' ? 'smoke' : 'motion');
+      const areaId = remoteSensor
+        ? locationForSensor(remoteSensor).areaId
+        : resolveAreaId(event.localizacao_id, event.localizacao);
+      const area = areaId ? AREAS[areaId] : null;
+      const location = remoteSensor
+        ? locationForSensor(remoteSensor).location
+        : event.localizacao?.trim() || (area ? area.name.replace(/\s*\n\s*/g, ' ').trim() : 'Não cadastrado');
+      const eventSensorId = event.sensor_codigo || event.codigo_sensor || (event.sensor_id !== null && event.sensor_id !== undefined ? String(event.sensor_id) : 'EVENT_' + eventIndex);
 
       return {
-        id: 'jazz-' + event.id,
+        id: 'jazz-' + String(event.id ?? eventIndex),
         kind,
-        sensorId: sensorUiId(event.sensor_id),
-        location: area ? area.name.replace(/\s*\n\s*/g, ' ').trim() : 'Não cadastrado',
+        sensorId: remoteSensor ? sensorUiId(remoteSensor, sensorRecords.indexOf(remoteSensor)) : eventSensorId,
+        location,
         startedAt: displayTimestamp(event.data_hora) ?? '—',
         eventType: event.tipo_evento,
-        description: event.descricao,
+        description: event.descricao ?? undefined,
       };
     });
 }
@@ -255,14 +335,12 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
 
     setTelemetryStatus((current) => current === 'online' ? current : 'connecting');
     try {
-      const [sensorRecords, eventRecords] = await Promise.all([
-        fetchJson<ApiSensor[]>('/sensores', session.token),
-        fetchJson<ApiEvent[]>('/eventos?limit=' + HISTORY_LIMIT, session.token),
+      const [sensorPayload, eventPayload] = await Promise.all([
+        fetchJson<unknown>('/sensores', session.token),
+        fetchJson<unknown>('/eventos?limit=' + HISTORY_LIMIT, session.token),
       ]);
-
-      if (!Array.isArray(sensorRecords) || !Array.isArray(eventRecords)) {
-        throw new TelemetryRequestError('O JazzSecurity retornou dados de sensores em formato inesperado.');
-      }
+      const sensorRecords = normalizeSensorsPayload(sensorPayload);
+      const eventRecords = normalizeEventsPayload(eventPayload);
 
       setSensors(mapSensors(sensorRecords, eventRecords));
       setHistory(mapHistory(eventRecords, sensorRecords));
@@ -300,7 +378,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     // Telemetria real é somente leitura no app.
   }, []);
   const registerSensor = useCallback((_sensorId: string, _areaId: AreaId) => {
-    // A associação física de área permanece definida em constants/sensor-registry.ts.
+    // A localização é lida diretamente de localizacao_id/localizacao enviados pelo backend.
   }, []);
   const unregisterSensor = useCallback((_sensorId: string) => {
     // A associação física de área permanece definida em constants/sensor-registry.ts.
