@@ -185,7 +185,7 @@ function mapSensors(records: ApiSensor[], events: ApiEvent[]): Sensor[] {
       kind,
       index,
       label: record.nome?.trim() || `${record.tipo} ${String(index).padStart(2, '0')}`,
-      location: area ? area.name.replace(/\\s*\\n\\s*/g, ' ').trim() : 'Não cadastrado',
+      location: area ? area.name.replace(/\s*\n\s*/g, ' ').trim() : 'Não cadastrado',
       areaId: SENSOR_AREA_BY_REMOTE_ID[record.id] ?? null,
       status: record.status === 'indisponivel'
         ? 'offline'
@@ -224,7 +224,7 @@ function mapHistory(events: ApiEvent[], sensorRecords: ApiSensor[]): SensorRecor
         id: 'jazz-' + event.id,
         kind,
         sensorId: sensorUiId(event.sensor_id),
-        location: area ? area.name.replace(/\\s*\\n\\s*/g, ' ').trim() : 'Não cadastrado',
+        location: area ? area.name.replace(/\s*\n\s*/g, ' ').trim() : 'Não cadastrado',
         startedAt: displayTimestamp(event.data_hora) ?? '—',
         eventType: event.tipo_evento,
         description: event.descricao,
