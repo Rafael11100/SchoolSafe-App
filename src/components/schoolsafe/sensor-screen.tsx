@@ -33,7 +33,11 @@ export default function SensorScreen({ kind, title }: Props) {
       {activeCount > 0 && <View style={[styles.alertBanner, { borderColor: accent + '40', backgroundColor: accent + '12' }]}><Ionicons name={smoke ? 'warning-outline' : 'walk-outline'} size={17} color={accent} /><Text style={styles.alertText}>{smoke ? 'Alerta de fumaça ativo. Verifique o local.' : 'Movimento detectado nas áreas monitoradas.'}</Text></View>}
       <View style={styles.list}>{registered.map((sensor, index) => <SensorCard key={sensor.id} sensor={sensor} index={index} />)}</View>
       {unregistered.length > 0 && <View style={styles.unregistered}><Text style={styles.sectionTitle}>Não cadastrados</Text><Text style={styles.caption}>Aguardando o id real da área.</Text><View style={styles.list}>{unregistered.map((sensor, index) => <SensorCard key={sensor.id} sensor={sensor} index={registered.length + index} />)}</View></View>}
-      {sensors.length === 0 && <View style={styles.empty}><Ionicons name="radio-outline" size={28} color="#777" /><Text style={styles.emptyTitle}>Nenhum sensor cadastrado</Text><Text style={styles.caption}>Os sensores aparecerão aqui quando forem registrados.</Text></View>}
+      {sensors.length === 0 && <View style={styles.empty}>
+        <Ionicons name={telemetryStatus === 'connecting' ? 'cloud-download-outline' : 'radio-outline'} size={28} color="#777" />
+        <Text style={styles.emptyTitle}>{telemetryStatus === 'connecting' ? 'Aguardando sensores do backend' : telemetryStatus === 'online' ? 'Nenhum sensor cadastrado' : 'Sensores indisponíveis'}</Text>
+        <Text style={styles.caption}>{telemetryStatus === 'connecting' ? 'Os dispositivos aparecerão aqui assim que forem enviados pelo JazzSecurity.' : telemetryStatus === 'online' ? 'O JazzSecurity ainda não retornou dispositivos cadastrados.' : telemetryError ?? 'Aguardando conexão com o JazzSecurity para carregar os dispositivos.'}</Text>
+      </View>}
       <Text style={styles.footer}>Leituras reais recebidas do ESP via JazzSecurity. A tela atualiza automaticamente a cada 10 segundos.</Text>
     </ScrollView>
   </View>;
