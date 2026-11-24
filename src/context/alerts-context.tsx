@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { AREAS, type AreaId } from '@/constants/areas';
-import { SENSOR_REGISTRY } from '@/constants/sensor-registry';
+import { SENSOR_AREA_BY_REMOTE_ID } from '@/constants/sensor-registry';
 import { useAuth } from '@/context/auth-context';
 import { formatTime } from '@/utils/date';
 
@@ -90,29 +90,6 @@ type AlertsContextType = {
 
 const AlertsContext = createContext<AlertsContextType | undefined>(undefined);
 
-function makeSensors(status: SensorStatus = 'offline'): Sensor[] {
-  const counters: Record<SensorKind, number> = { smoke: 0, motion: 0 };
-  return SENSOR_REGISTRY.map((seed) => {
-    counters[seed.kind] += 1;
-    const area = seed.areaId ? AREAS[seed.areaId] : null;
-    return {
-      id: seed.id,
-      kind: seed.kind,
-      index: counters[seed.kind],
-      label: seed.kind === 'smoke' ? 'MQ-2 01' : 'PIR 01',
-      areaId: seed.areaId,
-      location: area ? area.name.replace(/\s*\n\s*/g, ' ').trim() : 'Não cadastrado',
-      status,
-      active: false,
-      startedAt: null,
-      endedAt: null,
-      lastEventAt: null,
-      lastSeenAt: null,
-      value: null,
-    };
-  });
-}
-
 class TelemetryRequestError extends Error {
   constructor(message: string, readonly status?: number) {
     super(message);
@@ -163,62 +140,91 @@ async function fetchJson<T>(path: string, token: string): Promise<T> {
   }
 }
 
-function kindForSensorId(sensorId: number): SensorKind {
-  return sensorId === 2 ? 'smoke' : 'motion';
+function kindForSensorType(type: ApiSensor['tipo']): SensorKind {
+  return type === 'MQ-2' ? 'smoke' : 'motion';
 }
 
+function sensorUiId(remoteId: number): string {
+  return `JAZZ_${remoteId}`;
+}
+
+function areaForRemoteSensor(remoteId: number) {
+  const areaId = SENSOR_AREA_BY_REMOTE_ID[remoteId] ?? null;
+  return areaId ? AREAS[areaId] : null;
+}
+
+/** Só cria cartões para registros efetivamente recebidos de GET /sensores. */
 function mapSensors(records: ApiSensor[], events: ApiEvent[]): Sensor[] {
-  const eventBySensor = new Map<number, ApiEvent>();
+  const counters: Record<SensorKind, number> = { smoke: 0, motion: 0 };
+  const latestEventBySensor = new Map<number, ApiEvent>();
+
   for (const event of [...events].sort((a, b) => Date.parse(b.data_hora) - Date.parse(a.data_hora))) {
-    if (!eventBySensor.has(event.sensor_id)) eventBySensor.set(event.sensor_id, event);
+    if (!latestEventBySensor.has(event.sensor_id)) {
+      latestEventBySensor.set(event.sensor_id, event);
+    }
   }
 
-  return SENSOR_REGISTRY.map((seed) => {
-    const remoteId = seed.kind === 'smoke' ? 2 : 1;
-    const record = records.find((item) => item.id === remoteId);
-    const lastEvent = eventBySensor.get(remoteId);
-    const area = seed.areaId ? AREAS[seed.areaId] : null;
-    const active = record?.estado_ativo === true;
+  return records.flatMap((record) => {
+    if (record.tipo !== 'PIR' && record.tipo !== 'MQ-2') return [];
+
+    const kind = kindForSensorType(record.tipo);
+    counters[kind] += 1;
+    const index = counters[kind];
+    const area = areaForRemoteSensor(record.id);
+    const lastEvent = latestEventBySensor.get(record.id);
+    const active = record.estado_ativo === true;
     const lastEventAt = displayTimestamp(lastEvent?.data_hora);
-    const serverStale = record?.status === 'desatualizado';
     const relevantAlert = active
       ? events
-          .filter((event) => event.sensor_id === remoteId && event.tipo_evento !== 'NORMALIZACAO')
+          .filter((event) => event.sensor_id === record.id && event.tipo_evento !== 'NORMALIZACAO')
           .sort((a, b) => Date.parse(b.data_hora) - Date.parse(a.data_hora))[0]
       : undefined;
 
-    return {
-      id: seed.id,
-      kind: seed.kind,
-      index: seed.kind === 'smoke' ? 1 : 1,
-      label: record?.nome ?? (seed.kind === 'smoke' ? 'MQ-2 01' : 'PIR 01'),
-      location: area ? area.name.replace(/\s*\n\s*/g, ' ').trim() : 'Não cadastrado',
-      areaId: seed.areaId,
-      status: !record || record.status === 'indisponivel' ? 'offline' : serverStale ? 'stale' : active ? 'alert' : 'normal',
+    return [{
+      id: sensorUiId(record.id),
+      kind,
+      index,
+      label: record.nome?.trim() || `${record.tipo} ${String(index).padStart(2, '0')}`,
+      location: area ? area.name.replace(/\\s*\\n\\s*/g, ' ').trim() : 'Não cadastrado',
+      areaId: SENSOR_AREA_BY_REMOTE_ID[record.id] ?? null,
+      status: record.status === 'indisponivel'
+        ? 'offline'
+        : record.status === 'desatualizado'
+          ? 'stale'
+          : active
+            ? 'alert'
+            : 'normal',
       active,
       startedAt: active
-        ? displayTimestamp(relevantAlert?.data_hora) ?? displayTimestamp(record?.data_hora)
+        ? displayTimestamp(relevantAlert?.data_hora) ?? displayTimestamp(record.data_hora)
         : null,
       endedAt: !active && lastEvent?.tipo_evento === 'NORMALIZACAO' ? lastEventAt : null,
       lastEventAt,
-      lastSeenAt: record?.data_hora ?? null,
-      value: typeof record?.valor === 'number' ? record.valor : null,
-    };
+      lastSeenAt: record.data_hora,
+      value: typeof record.valor === 'number' ? record.valor : null,
+    }];
   });
 }
 
-function mapHistory(events: ApiEvent[]): SensorRecord[] {
+function mapHistory(events: ApiEvent[], sensorRecords: ApiSensor[]): SensorRecord[] {
+  const sensorById = new Map(sensorRecords.map((sensor) => [sensor.id, sensor]));
+
   return [...events]
     .sort((a, b) => Date.parse(b.data_hora) - Date.parse(a.data_hora))
     .map((event) => {
-      const kind = kindForSensorId(event.sensor_id);
-      const seed = SENSOR_REGISTRY.find((item) => item.kind === kind);
-      const area = seed?.areaId ? AREAS[seed.areaId] : null;
+      const remoteSensor = sensorById.get(event.sensor_id);
+      const kind: SensorKind = remoteSensor
+        ? kindForSensorType(remoteSensor.tipo)
+        : event.tipo_evento === 'FUMACA_GAS'
+          ? 'smoke'
+          : 'motion';
+      const area = areaForRemoteSensor(event.sensor_id);
+
       return {
         id: 'jazz-' + event.id,
         kind,
-        sensorId: seed?.id ?? String(event.sensor_id),
-        location: area ? area.name.replace(/\s*\n\s*/g, ' ').trim() : 'Não cadastrado',
+        sensorId: sensorUiId(event.sensor_id),
+        location: area ? area.name.replace(/\\s*\\n\\s*/g, ' ').trim() : 'Não cadastrado',
         startedAt: displayTimestamp(event.data_hora) ?? '—',
         eventType: event.tipo_evento,
         description: event.descricao,
@@ -228,7 +234,7 @@ function mapHistory(events: ApiEvent[]): SensorRecord[] {
 
 export function AlertsProvider({ children }: { children: React.ReactNode }) {
   const { session, signOut } = useAuth();
-  const [sensors, setSensors] = useState<Sensor[]>(() => makeSensors());
+  const [sensors, setSensors] = useState<Sensor[]>([]);
   const [history, setHistory] = useState<SensorRecord[]>([]);
   const [telemetryStatus, setTelemetryStatus] = useState<TelemetryStatus>(
     JAZZSECURITY_URL ? 'connecting' : 'unconfigured',
@@ -259,7 +265,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       }
 
       setSensors(mapSensors(sensorRecords, eventRecords));
-      setHistory(mapHistory(eventRecords));
+      setHistory(mapHistory(eventRecords, sensorRecords));
       setLoadedToken(session.token);
       setTelemetryStatus('online');
       setTelemetryError(null);
@@ -312,7 +318,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const hasSessionData = Boolean(session && loadedToken === session.token);
-  const visibleSensors = useMemo(() => hasSessionData ? sensors : makeSensors('offline'), [hasSessionData, sensors]);
+  const visibleSensors = useMemo(() => hasSessionData ? sensors : [], [hasSessionData, sensors]);
   const visibleHistory = useMemo(() => hasSessionData ? history : [], [hasSessionData, history]);
   const visibleTelemetryStatus: TelemetryStatus = !JAZZSECURITY_URL
     ? 'unconfigured'

@@ -1,9 +1,10 @@
 import type { AreaId } from '@/constants/areas';
-import type { SensorKind } from '@/context/alerts-context';
 
-export type SensorSeed = { id: string; kind: SensorKind; areaId: AreaId | null };
-
-export const SENSOR_REGISTRY: SensorSeed[] = [
-  { id: 'SMOKE_1', kind: 'smoke', areaId: 'WC_MASC' },
-  { id: 'MOTION_2', kind: 'motion', areaId: null },
-];
+/**
+ * Metadados de localização para sensores que já existem no backend.
+ * Este arquivo NÃO cadastra sensores nem cria cartões; a lista de dispositivos
+ * exibida pelo aplicativo vem exclusivamente de GET /sensores.
+ */
+export const SENSOR_AREA_BY_REMOTE_ID: Partial<Record<number, AreaId>> = {
+  2: 'WC_MASC',
+};

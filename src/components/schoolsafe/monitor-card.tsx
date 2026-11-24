@@ -24,7 +24,7 @@ export default function MonitorCard({ sensors, onSelect, telemetryStatus, teleme
   const accent = smoke ? '#F2B8B5' : motion ? '#A8C7FA' : '#C1C7D0';
   const connectionColor = telemetryStatus === 'online' ? '#A8DAB5' : telemetryStatus === 'connecting' ? '#EAB308' : '#777';
   const connectionLabel = telemetryStatus === 'online' ? 'API ONLINE' : telemetryStatus === 'connecting' ? 'CONECTANDO' : telemetryStatus === 'unconfigured' ? 'SEM API' : 'OFFLINE';
-  const headline = smoke ? 'ALERTA DE FUMAÇA' : motion ? 'MOVIMENTO DETECTADO' : 'Tudo normal';
+  const headline = sensors.length === 0\n    ? telemetryStatus === 'connecting' ? 'AGUARDANDO SENSORES' : telemetryStatus === 'online' ? 'NENHUM SENSOR CADASTRADO' : 'SEM DADOS DOS SENSORES'\n    : smoke ? 'ALERTA DE FUMAÇA' : motion ? 'MOVIMENTO DETECTADO' : 'Tudo normal';
   const latestActivity = [...sensors].filter((sensor) => sensor.lastEventAt).sort((a, b) => (b.lastEventAt ?? '').localeCompare(a.lastEventAt ?? ''))[0];
   const selectSensor = (sensor: Sensor) => {
     const node = alertRefs.current[sensor.id];
@@ -32,11 +32,11 @@ export default function MonitorCard({ sensors, onSelect, telemetryStatus, teleme
     node.measureInWindow((x, y, width, height) => onSelect(sensor, { x, y, width, height }));
   };
 
-  return <Glass intensity={52} elevated style={[styles.card, { borderColor: active.length ? accent + '66' : 'rgba(255,255,255,0.10)' }]}>
+  const statusDescription = sensors.length === 0\n    ? telemetryStatus === 'connecting' ? 'Aguardando os dispositivos que serão enviados pelo JazzSecurity' : telemetryStatus === 'online' ? 'A API está conectada, mas ainda não retornou sensores cadastrados' : telemetryError ?? 'Aguardando conexão para carregar os sensores'\n    : telemetryError ? telemetryError : active.length ? 'Acompanhe os eventos ativos abaixo' : 'Todos os sensores recebidos estão em estado normal';\n\n  return <Glass intensity={52} elevated style={[styles.card, { borderColor: active.length ? accent + '66' : 'rgba(255,255,255,0.10)' }]}>
     <View style={styles.content}>
     <View style={styles.top}>
-      <View style={[styles.icon, { backgroundColor: active.length ? accent + '20' : 'rgba(160,160,160,0.12)' }]}><Ionicons name={smoke ? 'flame-outline' : motion ? 'walk-outline' : 'shield-checkmark-outline'} size={23} color={accent} /></View>
-      <View style={styles.heading}><Text accessibilityLiveRegion={smoke ? 'assertive' : 'polite'} style={[styles.headline, { color: smoke ? '#F2B8B5' : motion ? '#A8C7FA' : '#C1C7D0' }]}>{headline}</Text><Text style={styles.caption}>{telemetryError ? telemetryError : active.length ? 'Acompanhe os eventos ativos abaixo' : 'Todos os sensores estão em estado normal'}</Text></View>
+      <View style={[styles.icon, { backgroundColor: active.length ? accent + '20' : 'rgba(160,160,160,0.12)' }]}><Ionicons name={sensors.length === 0 ? 'radio-outline' : smoke ? 'flame-outline' : motion ? 'walk-outline' : 'shield-checkmark-outline'} size={23} color={accent} /></View>
+      <View style={styles.heading}><Text accessibilityLiveRegion={smoke ? 'assertive' : 'polite'} style={[styles.headline, { color: smoke ? '#F2B8B5' : motion ? '#A8C7FA' : '#C1C7D0' }]}>{headline}</Text><Text style={styles.caption}>{statusDescription}</Text></View>
       <Pressable onPress={onRefresh} style={[styles.online, { borderColor: connectionColor + '55' }]} accessibilityRole="button" accessibilityLabel="Atualizar conexão dos sensores"><View style={[styles.dot, { backgroundColor: connectionColor }]} /><Text style={[styles.onlineText, { color: connectionColor }]}>{connectionLabel}</Text></Pressable>
     </View>
     <View style={styles.stats}>
